@@ -6,20 +6,25 @@
 
 class Display {
 private:
-    std::string formato;   // ex.: "jpeg" (para futuras versões com imagem)
+    std::string formato;    // "texto" ou "imagem"
+    std::string caminhoImagemBase; // arquivo base do hidrômetro (PNG/JPEG)
 
 public:
     // Construtor
-    Display(std::string formato = "texto");
+    Display(std::string formato = "texto", std::string caminhoImagemBase = "hidrômetro_base.png");
 
-    // Mostra a leitura no terminal
+    // Exibe o mostrador (dependendo do formato escolhido)
     void desenharMostrador(const Medicao& medicao) const;
 
-    // Adiciona um texto extra sobreposto (ex.: "Simulação em andamento...")
+    // Saída em texto puro (para depuração ou fallback)
     void sobreporTexto(const std::string& texto) const;
 
-    // Getter
+    // Saída gráfica: sobrepõe os dígitos na imagem base
+    void sobreporImagem(const Medicao& medicao) const;
+
+    // Getters
     std::string getFormato() const;
+    std::string getCaminhoImagemBase() const;
 };
 
 #endif

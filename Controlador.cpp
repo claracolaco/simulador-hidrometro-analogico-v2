@@ -4,14 +4,18 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <thread>
+#include <chrono>
+#include <cmath>
+#include <iomanip>
 
-// ===== utilitário local =====
+using std::string;
+
 static std::string to_lower(std::string s) {
     for (auto &ch : s) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
     return s;
 }
 
-// ===== trim (frente e trás) =====
 std::string Controlador::trim(const std::string& s) {
     size_t b = 0, e = s.size();
     while (b < e && std::isspace(static_cast<unsigned char>(s[b]))) ++b;
@@ -19,154 +23,137 @@ std::string Controlador::trim(const std::string& s) {
     return s.substr(b, e - b);
 }
 
-// ===== leitura do config.txt (CHAVE=valor) =====
+Controlador::~Controlador() {
+    parar();
+}
+
 bool Controlador::carregarConfig(const std::string& arquivo) {
     std::ifstream in(arquivo);
     if (!in.is_open()) {
-        std::cerr << "[ERRO] Não foi possível abrir o arquivo de configuração: " << arquivo << "\n";
+        std::cerr << "[ERRO] Não foi possível abrir: " << arquivo << "\n";
         return false;
     }
 
     configuracao.clear();
     std::string linha;
     while (std::getline(in, linha)) {
-        // ignora comentários e linhas vazias
         std::string raw = trim(linha);
-        if (raw.empty()) continue;
-        if (raw[0] == '#') continue;
+        if (raw.empty() || raw[0] == '#') continue;
 
-        // procura CHAVE=valor
         auto pos = raw.find('=');
         if (pos == std::string::npos) continue;
 
         std::string chave = trim(raw.substr(0, pos));
         std::string valor = trim(raw.substr(pos + 1));
-
-        if (!chave.empty())
-            configuracao[chave] = valor;
+        if (!chave.empty()) configuracao[chave] = valor;
     }
 
-    // ===== aplica valores com defaults sensatos =====
-    // TFS = tempo de funcionamento (minutos)
-    int TFS = 10;
-    if (auto it = configuracao.find("TFS"); it != configuracao.end()) {
-        TFS = std::max(0, std::stoi(it->second));
-    }
+    aplicarConfiguracao();
+    return true;
+}
 
-    // VAM = vazão por minuto (0..100)
-    float VAM = 0.0f;
+void Controlador::aplicarConfiguracao() {
+    // Valores padrão
+    float  VAM      = 20.0f;
+    float  PCT_AR   = 0.0f;
+    float  BITOLA   = 15.0f;
+    string SENTIDO  = "Direto";
+
+    // Carrega configurações
     if (auto it = configuracao.find("VAM"); it != configuracao.end()) {
-        VAM = std::stof(it->second);
+        try { VAM = std::stof(it->second); } catch(...) {}
     }
-
-    // PCT_AR = percentual de ar (0..100)
-    float PCT_AR = 0.0f;
     if (auto it = configuracao.find("PCT_AR"); it != configuracao.end()) {
-        PCT_AR = std::stof(it->second);
+        try { PCT_AR = std::stof(it->second); } catch(...) {}
     }
-
-    // BITOLA (opcional)
-    float BITOLA = 0.0f;
     if (auto it = configuracao.find("BITOLA"); it != configuracao.end()) {
-        BITOLA = std::stof(it->second);
+        try { BITOLA = std::stof(it->second); } catch(...) {}
     }
-
-    // SENTIDO = "Direto" | "Reverso"  (default: Direto)
-    std::string SENTIDO = "Direto";
     if (auto it = configuracao.find("SENTIDO"); it != configuracao.end()) {
         SENTIDO = it->second;
     }
 
-    // TAXA_IMG = a cada X m3 gerar saída (default: 1.0)
-    float TAXA_IMG = 1.0f;
-    if (auto it = configuracao.find("TAXA_IMG"); it != configuracao.end()) {
-        // permite "1m3" ou "1.0"
-        std::string v = to_lower(it->second);
-        for (char &c : v) {
-            if (!std::isdigit(static_cast<unsigned char>(c)) && c != '.' && c != ',')
-                c = ' ';
-        }
-        // substitui vírgula por ponto e extrai
-        std::replace(v.begin(), v.end(), ',', '.');
-        std::istringstream iss(v);
-        iss >> TAXA_IMG;
-        if (TAXA_IMG <= 0.0f) TAXA_IMG = 1.0f;
-    }
-
-    // CAMINHO = caminho do arquivo de saída (default: "saida.txt" nesta versão)
-    std::string CAMINHO = "saida.txt";
-    if (auto it = configuracao.find("CAMINHO"); it != configuracao.end()) {
-        CAMINHO = it->second;
-    }
-
-    // FORMATO do display (texto/jpeg) — manteremos "texto" por enquanto
-    std::string FORMATO = "texto";
-    if (auto it = configuracao.find("FORMATO"); it != configuracao.end()) {
-        FORMATO = to_lower(it->second);
-    }
-
-    // ===== aplica nos componentes do Hidrometro =====
-    // Entrada
+    // Configura entrada
     h1.getEntrada().configurar(BITOLA, VAM, SENTIDO, PCT_AR);
 
-    // Saída
-    h1.getSaida().setCaminhoImagem(CAMINHO);
-    h1.getSaida().setTaxaImg_m3(TAXA_IMG);
-
-    // Display
-    // (por enquanto só guardamos o formato para futura evolução)
-    // Se quiser, você pode criar um setter. Aqui não é essencial.
-    // h1.getDisplay().setFormato(FORMATO); // (não existe ainda; apenas informativo)
-
-    std::cout << "[CONFIG] TFS=" << TFS
-              << " | VAM=" << VAM
-              << " | PCT_AR=" << PCT_AR
-              << " | BITOLA=" << BITOLA
-              << " | SENTIDO=" << SENTIDO
-              << " | TAXA_IMG=" << TAXA_IMG
-              << " | CAMINHO=" << CAMINHO
-              << " | FORMATO=" << FORMATO
-              << std::endl;
-
-    // Armazena TFS na config (para uso em executa)
-    configuracao["TFS"] = std::to_string(TFS);
-    return true;
+    std::cout << "[CONFIG] VAM=" << VAM << " m³/min | PCT_AR=" << PCT_AR << "% | SENTIDO=" << SENTIDO << std::endl;
+    std::cout << "[CONFIG] BITOLA=" << BITOLA << " mm | MODO=Terminal Only" << std::endl;
 }
 
-// ===== executa a simulação =====
-void Controlador::executa() {
-    // lê TFS da configuração (minutos de simulação)
-    int TFS = 10;
-    if (auto it = configuracao.find("TFS"); it != configuracao.end()) {
-        TFS = std::max(0, std::stoi(it->second));
+void Controlador::threadInputHandler() {
+    std::string input;
+    while (rodando_.load()) {
+        if (std::cin >> input) {
+            if (to_lower(input) == "q") {
+                std::cout << "\n[INFO] Comando 'q' recebido. Parando sistema..." << std::endl;
+                parar();
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+}
 
-    // Periodicidade por volume (a cada X m³ gera saída)
-    float taxaImg = h1.getSaida().getTaxaImg_m3();
+void Controlador::executaIninterrupta(float intervaloSegundos) {
+    std::cout << "\n===========================================" << std::endl;
+    std::cout << "    SIMULAÇÃO ININTERRUPTA INICIADA" << std::endl;
+    std::cout << "===========================================" << std::endl;
+    std::cout << "Sistema rodando continuamente..." << std::endl;
+    std::cout << "Para parar: Digite 'q' e pressione Enter" << std::endl;
+    std::cout << "===========================================" << std::endl;
 
-    std::cout << "[EXECUCAO] Iniciando simulação por " << TFS << " minuto(s)...\n";
+    // Converte o intervalo de segundos para minutos (mais preciso)
+    const double passoMin = static_cast<double>(intervaloSegundos) / 60.0;
+    int contador = 0;
+    
+    std::cout << "[INICIO] Vazão: " << h1.getEntrada().getVazao() << " m³/min" << std::endl;
+    std::cout << "[INICIO] Percentual de ar: " << h1.getEntrada().getArPercentual() << "%" << std::endl;
+    std::cout << "[INICIO] Sentido: " << h1.getEntrada().getSentido() << std::endl;
+    std::cout << "[INICIO] Intervalo: " << intervaloSegundos << "s (" << passoMin << " min)" << std::endl;
 
-    // Volume salvo pela última geração de saída (para comparação)
-    double ultimoVolumeGerado = 0.0;
+    // Inicia thread para capturar entrada do usuário
+    threadInput_ = std::thread(&Controlador::threadInputHandler, this);
 
-    // Gera uma saída inicial (opcional)
-    h1.apresentacaoMedicao();
-    ultimoVolumeGerado = h1.getMedicao().getVolumeTotal_m3();
+    // LOOP PRINCIPAL - VERDADEIRAMENTE INFINITO ATÉ COMANDO 'q'
+    while (rodando_.load()) {
+        try {
+            // Mede o fluxo usando o intervalo correto em minutos
+            h1.medir(passoMin);
+            
+            double volumeAtual = h1.getMedicao().getVolumeTotal_m3();
+            int mmAtual = h1.getMedicao().getMM();
+            
+            // Status a cada iteração (com intervalo de 2s)
+            ++contador;
+            std::cout << "[" << std::setw(4) << (contador * static_cast<int>(intervaloSegundos)) << "s] Volume: " 
+                      << std::fixed << std::setprecision(6) << volumeAtual 
+                      << " m³ | Litros: " << std::setw(3) << mmAtual << " L" << std::endl;
 
-    for (int minuto = 1; minuto <= TFS; ++minuto) {
-        // avança 1 minuto de simulação
-        h1.medir(1.0f);
+            // Pausa conforme intervalo configurado (2 segundos por padrão)
+            std::this_thread::sleep_for(std::chrono::milliseconds(
+                static_cast<int>(intervaloSegundos * 1000.0f)));
 
-        // verifica se atingiu o próximo marco de geração por volume
-        double volumeAtual = h1.getMedicao().getVolumeTotal_m3();
-        if (taxaImg > 0.0f && (volumeAtual - ultimoVolumeGerado) >= static_cast<double>(taxaImg)) {
-            h1.apresentacaoMedicao();
-            ultimoVolumeGerado = volumeAtual;
+        } catch (const std::exception& e) {
+            std::cerr << "[ERRO] " << e.what() << " - Continuando..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        } catch (...) {
+            std::cerr << "[ERRO] Exceção desconhecida - Continuando..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
     }
 
-    // Garante uma saída final ao término da simulação
-    h1.apresentacaoMedicao();
+    // Aguarda thread de input
+    if (threadInput_.joinable()) {
+        threadInput_.join();
+    }
 
-    std::cout << "[EXECUCAO] Simulação concluída.\n";
+    std::cout << "\n[INFO] Simulação finalizada." << std::endl;
+}
+
+void Controlador::parar() {
+    rodando_.store(false);
+    
+    if (threadInput_.joinable()) {
+        threadInput_.join();
+    }
 }

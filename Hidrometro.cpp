@@ -1,34 +1,30 @@
 #include "Hidrometro.hpp"
+#include <thread>
+#include <chrono>
+#include <cmath>
+#include <iostream>
 
-// Construtor completo
-Hidrometro::Hidrometro(const Entrada& in, const Saida& out, const Display& disp, const Medicao& med)
-    : input(in), output(out), display(disp), medicao(med) {}
+Hidrometro::Hidrometro(const Entrada& in, const Medicao& med)
+    : input(in), medicao(med) {}
 
-// Passo de simulação: coleta volume da Entrada e contabiliza na Medicao
-void Hidrometro::medir(float minutos) {
-    if (minutos <= 0.0f) return;
-    float volume = input.amostrarFluxo(minutos); // já considera sentido e ar
-    if (volume > 0.0f) {
-        medicao.contabilizar(static_cast<double>(volume));
+void Hidrometro::medir(double minutos) {
+    if (minutos <= 0.0) return;
+    
+    // Usa precisão dupla para cálculos mais exatos
+    double volume = input.amostrarFluxo(static_cast<float>(minutos));
+    if (volume > 0.0) {
+        medicao.contabilizar(volume);
     }
 }
 
-// Apresenta no display e persiste via Saida
 void Hidrometro::apresentacaoMedicao() {
-    display.desenharMostrador(medicao);
-    output.gerarJPEG(medicao, display);
+    // Apresentação simples no terminal
+    std::cout << "[HIDROMETRO] " << medicao.leituraTexto() << std::endl;
 }
 
-// Getters (estado)
+// Getters/Setters
 const Medicao& Hidrometro::getMedicao() const { return medicao; }
 Medicao& Hidrometro::getMedicao() { return medicao; }
 
-// Getters (componentes)
 const Entrada& Hidrometro::getEntrada() const { return input; }
 Entrada& Hidrometro::getEntrada() { return input; }
-
-const Saida& Hidrometro::getSaida() const { return output; }
-Saida& Hidrometro::getSaida() { return output; }
-
-const Display& Hidrometro::getDisplay() const { return display; }
-Display& Hidrometro::getDisplay() { return display; }

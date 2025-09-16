@@ -3,30 +3,29 @@
 
 #include <map>
 #include <string>
+#include <atomic>
+#include <thread>
+#include <iostream>
 #include "Hidrometro.hpp"
 
 class Controlador {
 private:
-    std::map<std::string, std::string> configuracao; // pares CHAVE=valor do config.txt
+    std::map<std::string, std::string> configuracao;
     Hidrometro h1;
-
-    // utilitário: remove espaços nas pontas
+    std::atomic<bool> rodando_;
+    std::thread threadInput_;
+    
     static std::string trim(const std::string& s);
+    void aplicarConfiguracao();
+    void threadInputHandler();
 
 public:
-    Controlador() = default;
+    Controlador() : h1(Entrada(), Medicao()), rodando_(true) {}
+    ~Controlador();
 
-    // Carrega o arquivo de configuração (ex.: TFS, VAM, PCT_AR, TAXA_IMG, CAMINHO)
-    // Retorna true se carregou com sucesso
+    void executaIninterrupta(float intervaloSegundos = 1.0f);
     bool carregarConfig(const std::string& arquivo);
-
-    // Executa a simulação de acordo com a configuração lida
-    void executa();
-
-    // Acesso (útil para testes)
-    const std::map<std::string, std::string>& getConfiguracao() const { return configuracao; }
-    Hidrometro& getHidrometro() { return h1; }
-    const Hidrometro& getHidrometro() const { return h1; }
+    void parar();
 };
 
 #endif
