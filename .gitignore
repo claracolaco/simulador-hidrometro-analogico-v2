@@ -1,0 +1,9 @@
+# Executáveis
+*.exe
+
+# Pasta de saída de imagens de teste
+output/
+
+# Arquivos de teste temporários
+teste_*.exe
+teste_*.cpp

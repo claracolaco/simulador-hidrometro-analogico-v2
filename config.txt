@@ -1,0 +1,5 @@
+VAM:4500
+PCT_AR:10
+TAXA_IMG:0.1
+CAMINHO:hidrometro.bmp
+FORMATO:jpeg
