@@ -1,5 +1,10 @@
 # Simulador de Hidrômetro Analógico 2.0
 
+## Ferramenta utilizada para o Diagrama de Classes — SHA 2.0
+
+- Baixe/visualize o diagrama: [Clique aqui](Diagrama%20de%20classes%202.0.pdf) 
+- Ferramenta: **[draw.io](https://app.diagrams.net/)**
+
 ## Descrição do Projeto
 
 Este projeto, desenvolvido como parte do componente curricular de Padrões de Projetos do curso de Engenharia da Computação do IFPB - Campus Campina Grande, é um software em C++ que simula o funcionamento de um hidrômetro analógico. O objetivo é substituir um hidrômetro real em testes e experimentos, permitindo a visualização contínua do consumo de água e a extração de dados. 
